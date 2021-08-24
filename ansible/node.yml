@@ -1,0 +1,84 @@
+- hosts: all
+  become: yes
+  become_user: root
+
+  vars:
+    NODE_ROLE: "{{ lookup('env', 'NODE_ROLE') }}"
+    FILES_PATH: "/root/files"
+    DEBS_PATH: "{{ FILES_PATH }}/debs"
+    K3S_DISTRIB_PATH: "{{ FILES_PATH }}/k3s_distrib"
+    INSTALL_K3S_VERSION: "{{ lookup('env', 'INSTALL_K3S_VERSION') }}"
+    MASTER_IP: "{{ lookup('env', 'MASTER_IP') }}"
+    K3S_TOKEN: "{{ lookup('env', 'K3S_TOKEN') }}"
+
+  tasks:
+
+    - name: Install K3s master
+      args:
+        executable: /bin/sh
+      shell: |
+        export INSTALL_K3S_SKIP_DOWNLOAD=true
+        export INSTALL_K3S_VERSION="{{ INSTALL_K3S_VERSION }}"
+        export INSTALL_K3S_EXEC="--cluster-init --tls-san {{ MASTER_IP }}"
+        export K3S_TOKEN="{{ K3S_TOKEN }}"
+        cat {{ K3S_DISTRIB_PATH }}/install.sh | sh -s - --docker && \
+        until systemctl is-active --quiet k3s
+        do
+          sleep 5
+        done
+        while [ ! -f /etc/rancher/k3s/k3s.yaml ]
+        do
+          echo "Waiting for /etc/rancher/k3s/k3s.yaml ..."
+          sleep 5
+        done
+        cat /etc/rancher/k3s/k3s.yaml
+      register: shell_output_master
+      when: 'NODE_ROLE == "master"'
+    - debug:
+        var: shell_output_master
+
+    - name: Fetch KUBECONFIG from K3s master
+      fetch:
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: ../k3s.yaml
+        flat: yes
+      register: kubectl
+      when: 'NODE_ROLE == "master"'
+    - debug:
+        var: kubectl
+
+    - name: Install K3s worker
+      args:
+        executable: /bin/sh
+      shell: |
+        export INSTALL_K3S_SKIP_DOWNLOAD=true
+        export INSTALL_K3S_VERSION="{{ INSTALL_K3S_VERSION }}"
+        export K3S_URL=https://"{{ MASTER_IP }}":6443 K3S_TOKEN="{{ K3S_TOKEN }}"
+        cat {{ K3S_DISTRIB_PATH }}/install.sh | sh -s - --docker --node-label "{{ NODE_ROLE }}"="{{ NODE_ROLE }}"
+        until systemctl is-active --quiet k3s-agent
+        do
+          sleep 5
+        done
+      when: 'NODE_ROLE == "worker"'
+      register: shell_output_worker
+    - debug:
+        var: shell_output_worker
+
+    - name: Install K3s tainted worker {{ NODE_ROLE }}
+      args:
+        executable: /bin/sh
+      shell: |
+        export INSTALL_K3S_SKIP_DOWNLOAD=true
+        export INSTALL_K3S_VERSION="{{ INSTALL_K3S_VERSION }}"
+        export K3S_URL=https://"{{ MASTER_IP }}":6443 K3S_TOKEN="{{ K3S_TOKEN }}"
+        cat {{ K3S_DISTRIB_PATH }}/install.sh | sh -s - --docker \
+        --node-label "{{ NODE_ROLE }}"="{{ NODE_ROLE }}" \
+        --node-taint "{{ NODE_ROLE }}"="{{ NODE_ROLE }}":NoExecute
+        until systemctl is-active --quiet k3s-agent
+        do
+          sleep 5
+        done
+      when: 'NODE_ROLE == "db" or NODE_ROLE == "elk"'
+      register: shell_output_tainted_worker
+    - debug:
+        var: shell_output_tainted_worker

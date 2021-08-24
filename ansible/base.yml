@@ -1,0 +1,98 @@
+- hosts: all
+  become: yes
+  become_user: root
+
+  vars:
+    files_path: "/root/files"
+    debs_path: "{{ files_path }}/debs"
+    k3s_distrib_path: "{{ files_path }}/k3s_distrib"
+
+  tasks:
+
+    - name: "Check that /root/files/debs exist"
+      stat:
+        path: "{{ debs_path }}"
+      register: stat_result_debs
+    - debug:
+        var: stat_result_debs
+
+    - name: Upload files
+      copy:
+        src: "{{ item }}"
+        dest: "{{ debs_path }}/"
+      with_fileglob:
+      - ../files/debs/*.deb
+      when: not stat_result_debs.stat.exists
+
+    - name: Install packages
+      apt:
+        deb: "{{ debs_path }}/{{ item }}"
+        state: present
+      loop:
+        - apt_1.6.14_amd64.deb
+        - ca-certificates_20210119~18.04.1_all.deb
+        - gnupg2_2.2.4-1ubuntu1_all.deb
+        - software-properties-common_0.96.24.32.14_all.deb
+        - curl_7.58.0-2ubuntu3.14_amd64.deb
+        - wget_1.19.4-1ubuntu2.2_amd64.deb
+        - containerd.io_1.4.9-1_amd64.deb
+        - docker-ce-cli_20.10.8~3-0~ubuntu-bionic_amd64.deb
+        - docker-ce_20.10.8~3-0~ubuntu-bionic_amd64.deb
+      ignore_errors: yes
+      register: apt_output
+    - debug:
+        var: apt_output
+
+    - name: "Check that /var/lib/rancher/k3s/agent/images/k3s-airgap-images-amd64.tar.gz exists"
+      stat:
+        path: "/var/lib/rancher/k3s/agent/images/k3s-airgap-images-amd64.tar.gz"
+      register: stat_result1
+
+    - name: "Check that /usr/local/bin/k3s exists"
+      stat:
+        path: "/usr/local/bin/k3s"
+      register: stat_result2
+
+    - name: Upload files
+      copy:
+        src: "{{ item }}"
+        dest: "{{ k3s_distrib_path }}/"
+      with_fileglob:
+      - ../files/k3s_distrib/*
+      when: not stat_result1.stat.exists and not stat_result2.stat.exists
+
+    - name: sha256sum & copy K3s files in place
+      args:
+        executable: /bin/sh
+      shell: |
+        cd {{ k3s_distrib_path }}
+        cat sha256sum-install.sh.txt | sha256sum -c - && \
+        cat sha256sum-k3s.txt | sha256sum -c - && \
+        cat sha256sum-k3s-airgap-images-amd64.tar.gz.txt | sha256sum -c - && \
+        mkdir -p /var/lib/rancher/k3s/agent/images/ && \
+        cp k3s-airgap-images-amd64.tar.gz /var/lib/rancher/k3s/agent/images/ && \
+        chmod +x k3s && \
+        cp k3s /usr/local/bin/k3s
+      register: shell_output1
+      when: not stat_result1.stat.exists and not stat_result2.stat.exists
+    - debug:
+        var: shell_output1
+
+    - name: Enable docker systemd
+      systemd:
+        name: docker.service
+        state: started
+        daemon_reload: yes
+        enabled: yes
+      register: systemd_output_docker
+    - debug:
+        var: systemd_output_docker
+
+    - name: Load K3s airgap images
+      args:
+        executable: /bin/sh
+      shell: |
+        docker load < /var/lib/rancher/k3s/agent/images/k3s-airgap-images-amd64.tar.gz
+      register: shell_output_k3s_docker
+    - debug:
+        var: shell_output_k3s_docker

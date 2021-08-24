@@ -1,0 +1,158 @@
+nameOverride: ""
+fullnameOverride: ""
+
+image: eqalpha/keydb:x86_64_v6.0.18
+imagePullPolicy: IfNotPresent
+
+nodes: 2
+
+password: ""
+existingSecret: ""
+
+port: 6379
+
+threads: 2
+
+multiMaster: "yes"
+activeReplicas: "yes"
+protectedMode: "no"
+appendonly: "no"
+
+configExtraArgs: {}
+
+podAnnotations: {}
+
+tolerations: {}
+  # - effect: NoSchedule
+  #   key: key
+  #   operator: Equal
+  #   value: value
+
+additionalAffinities: {}
+  # nodeAffinity:
+  #   requiredDuringSchedulingIgnoredDuringExecution:
+  #     nodeSelectorTerms:
+  #       - matchExpressions:
+  #         - key: node_pool
+  #           operator: In
+  #           values: somenodepool
+
+# Additional init containers
+extraInitContainers: []
+
+# Additional sidecar containers
+extraContainers: []
+# - name: backup
+#   image: minio/mc:latest
+
+# Volumes that can be used in init and sidecar containers
+extraVolumes: []
+#  - name: volume-from-secret
+#    secret:
+#      secretName: secret-to-mount
+#  - name: empty-dir-volume
+#    emptyDir: {}
+
+# Liveness Probe
+livenessProbe:
+  tcpSocket:
+    port: keydb
+
+# Readiness Probe
+readinessProbe:
+  tcpSocket:
+    port: keydb
+  initialDelaySeconds: 30
+
+# Startup Probe
+startupProbe:
+  tcpSocket:
+    port: keydb
+  failureThreshold: 30
+  periodSeconds: 5
+
+persistentVolume:
+  enabled: true
+  accessModes:
+    - ReadWriteOnce
+  size: 1Gi
+
+  ## If defined, storageClassName: <storageClass>
+  ## If set to "-", storageClassName: "", which disables dynamic provisioning
+  ## If undefined (the default) or set to null, no storageClassName spec is
+  ##   set, choosing the default provisioner.  (gp2 on AWS, standard on
+  ##   GKE, AWS & OpenStack)
+  ##
+  # storageClass: "-"
+
+resources: {}
+
+# Please read https://kubernetes.io/docs/tasks/administer-cluster/sysctl-cluster/#enabling-unsafe-sysctls
+# before sysctls setup
+securityContext: {}
+  # sysctls:
+  # - name: net.core.somaxconn
+  #   value: "512"
+  # - name: vm.overcommit_memory
+  #   value: "1"
+
+service:
+  annotations: {}
+
+loadBalancer:
+  enabled: false
+
+  # annotations:
+  #   service.beta.kubernetes.io/aws-load-balancer-type: nlb
+  annotations: {}
+
+  # extraSpec:
+  #   loadBalancerIP: "1.2.3.4"
+  #   loadBalancerSourceRanges:
+  #   - 1.2.3.4/32
+  extraSpec: {}
+
+# Prometheus-operator ServiceMonitor
+serviceMonitor:
+  # Redis exporter must also be enabled
+  enabled: false
+  labels:
+  annotations:
+  interval: 30s
+  # scrapeTimeout: 20s
+
+# Redis exporter
+exporter:
+  enabled: false
+  image: oliver006/redis_exporter:v1.23.1-alpine
+  pullPolicy: IfNotPresent
+
+  # Prometheus port & scrape path
+  port: 9121
+  scrapePath: /metrics
+
+  # Liveness Probe
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 9121
+
+  # Readiness Probe
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 9121
+
+  # Startup Probe
+  startupProbe:
+    httpGet:
+      path: /health
+      port: 9121
+    failureThreshold: 30
+    periodSeconds: 5
+
+  # CPU/Memory resource limits/requests
+  resources: {}
+
+  # Additional args for redis exporter
+  extraArgs: {}

@@ -1,0 +1,9 @@
+http://archive.ubuntu.com/ubuntu/pool/main/a/apt/apt_1.6.14_amd64.deb
+http://archive.ubuntu.com/ubuntu/pool/main/c/ca-certificates/ca-certificates_20210119~18.04.1_all.deb
+http://archive.ubuntu.com/ubuntu/pool/universe/g/gnupg2/gnupg2_2.2.4-1ubuntu1_all.deb
+http://archive.ubuntu.com/ubuntu/pool/main/s/software-properties/software-properties-common_0.96.24.32.14_all.deb
+http://archive.ubuntu.com/ubuntu/pool/main/c/curl/curl_7.58.0-2ubuntu3.14_amd64.deb
+http://archive.ubuntu.com/ubuntu/pool/main/w/wget/wget_1.19.4-1ubuntu2.2_amd64.deb
+https://download.docker.com/linux/ubuntu/dists/bionic/pool/stable/amd64/docker-ce_20.10.8~3-0~ubuntu-bionic_amd64.deb
+https://download.docker.com/linux/ubuntu/dists/bionic/pool/stable/amd64/docker-ce-cli_20.10.8~3-0~ubuntu-bionic_amd64.deb
+https://download.docker.com/linux/ubuntu/dists/bionic/pool/stable/amd64/containerd.io_1.4.9-1_amd64.deb

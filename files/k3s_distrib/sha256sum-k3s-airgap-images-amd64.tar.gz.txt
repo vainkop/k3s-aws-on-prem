@@ -1,0 +1,1 @@
+447e9fa93ce94c925d296a7d99138eac9172fe524daf9076e10b27b98435f030  k3s-airgap-images-amd64.tar.gz

@@ -1,0 +1,59 @@
+name: 'Start K3s AWS on-prem Demo'
+on:
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - 'README.md'
+
+jobs:
+  start:
+    name: "Start"
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout the code
+      # Marketplace: https://github.com/marketplace/actions/checkout
+      - name: "Git checkout"
+        uses: actions/checkout@v2.3.4
+
+      # Provides AWS credentials to Terraform
+      # By default, Terraform checks the home directory for a .aws folder with a credential file
+      # Documentation: https://docs.aws.amazon.com/ses/latest/DeveloperGuide/create-shared-credentials-file.html
+      - name: "Setup ssh, terraform, kubectl & AWS credentials"
+        run: |
+          export TERRAFORM_VERSION="1.0.5" && \
+          export KUBECTL_VERSION="v1.21.4" && \
+          export ANSIBLE_VERSION="2.9.6+dfsg-1" && \
+          cat .github/install-cicd-tools.sh | bash -xes - \
+          "${{ secrets.AWS_ACCESS_KEY_ID }}" \
+          "${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
+          "${{ secrets.ID_RSA }}" \
+          "$TERRAFORM_VERSION" \
+          "$KUBECTL_VERSION" \
+          "$ANSIBLE_VERSION"
+
+      - name: "Start"
+        run: |
+          cat start.sh | bash -xes -
+          cat k3s.yaml
+
+      - name: "Create update release asset k3s.yaml"
+        run: |
+          export RELEASE_TAG="v1.0.0" && \
+          export ASSET_NAME="k3s.yaml" && \
+          cat .github/release-asset.sh | bash -xes - \
+          "${{ secrets.GITHUB_TOKEN }}" \
+          "${{ github.repository }}" \
+          "$RELEASE_TAG" \
+          "$ASSET_NAME"
+
+      - name: "Create an issue with the link to KUBECONFIG"
+        run: |
+          export RELEASE_TAG="v1.0.0" && \
+          export ASSET_NAME="k3s.yaml" && \
+          cat .github/create-issue.sh | bash -xes - \
+          "${{ secrets.GITHUB_TOKEN }}" \
+          "${{ github.repository }}" \
+          "$RELEASE_TAG" \
+          "$ASSET_NAME" \
+          "${{ github.sha }}"

@@ -1,0 +1,174 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "keydb.fullname" . }}
+  labels:
+    {{ include "keydb.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.nodes }}
+  serviceName: {{ include "keydb.fullname" . }}-headless
+  selector:
+    matchLabels:
+      {{ include "keydb.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/secret-utils: {{ include (print $.Template.BasePath "/secret-utils.yaml") . | sha256sum }}
+        {{- if .Values.exporter.enabled }}
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "{{ .Values.exporter.scrapePath }}"
+        prometheus.io/port: "{{ .Values.exporter.port }}"
+        {{- end }}
+        {{- if .Values.podAnnotations }}
+        {{- toYaml .Values.podAnnotations | nindent 8 }}
+        {{- end }}
+      labels:
+        {{ include "keydb.labels" . | nindent 8 }}
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                  - {{ include "keydb.name" . }}
+                - key: app.kubernetes.io/instance
+                  operator: In
+                  values:
+                  - {{ .Release.Name }}
+              topologyKey: "kubernetes.io/hostname"
+        {{- if .Values.additionalAffinities }}
+        {{- toYaml .Values.additionalAffinities | nindent 8 }}
+        {{- end }}
+      {{- if .Values.extraInitContainers }}
+      initContainers:
+      {{- toYaml .Values.extraInitContainers | nindent 6 }}
+      {{- end }}
+      containers:
+      - name: keydb
+        image: {{ .Values.image }}
+        imagePullPolicy: {{ .Values.imagePullPolicy }}
+        command:
+        - /utils/server.sh
+        {{- if .Values.existingSecret }}
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.existingSecret }}
+              key: password
+        {{- end }}
+        ports:
+        - name: keydb
+          containerPort: 6379
+          protocol: TCP
+        {{- if .Values.livenessProbe }}
+        livenessProbe:
+          {{- toYaml .Values.livenessProbe | nindent 10 }}
+        {{- end }}
+        {{- if .Values.readinessProbe }}
+        readinessProbe:
+          {{- toYaml .Values.readinessProbe | nindent 10 }}
+        {{- end }}
+        {{- if .Values.startupProbe }}
+        startupProbe:
+          {{- toYaml .Values.startupProbe | nindent 10 }}
+        {{- end }}
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+        volumeMounts:
+        - name: keydb-data
+          mountPath: /data
+        - name: utils
+          mountPath: /utils
+          readOnly: true
+      {{- if .Values.exporter.enabled }}
+      - name: redis-exporter
+        image: {{ .Values.exporter.image }}
+        imagePullPolicy: {{ .Values.exporter.pullPolicy }}
+        args:
+        {{- range $key, $value := .Values.exporter.extraArgs }}
+        - --{{ $key }}={{ $value }}
+        {{- end }}
+        env:
+        - name: REDIS_ADDR
+          value: redis://localhost:6379
+        {{- if .Values.existingSecret }}
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.existingSecret }}
+              key: password
+        {{- else if .Values.password }}
+        - name: REDIS_PASSWORD
+          value: "{{ .Values.password }}"
+        {{- end }}
+        {{- if .Values.exporter.livenessProbe }}
+        livenessProbe:
+          {{- toYaml .Values.exporter.livenessProbe | nindent 10 }}
+        {{- end }}
+        {{- if .Values.exporter.readinessProbe }}
+        readinessProbe:
+          {{- toYaml .Values.exporter.readinessProbe | nindent 10 }}
+        {{- end }}
+        {{- if .Values.exporter.startupProbe }}
+        startupProbe:
+          {{- toYaml .Values.exporter.startupProbe | nindent 10 }}
+        {{- end }}
+        resources:
+          {{- toYaml .Values.exporter.resources | nindent 10 }}
+        ports:
+        - name: redis-exporter
+          containerPort: {{ .Values.exporter.port }}
+      {{- end }}
+      {{- if .Values.extraContainers }}
+      {{- toYaml .Values.extraContainers | nindent 6 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      {{- if .Values.tolerations }}
+      tolerations:
+        {{- toYaml .Values.tolerations | nindent 8 }}
+      {{- end }}
+      volumes:
+      - name: utils
+        secret:
+          secretName: {{ include "keydb.fullname" . }}-utils
+          defaultMode: 0755
+          items:
+          - key: server.sh
+            path: server.sh
+      {{- if not .Values.persistentVolume.enabled }}
+      - name: keydb-data
+        emptyDir: {}
+      {{- end }}
+      {{- if .Values.extraVolumes }}
+      {{- toYaml .Values.extraVolumes | nindent 6 }}
+      {{- end }}
+  {{- if .Values.persistentVolume.enabled }}
+  volumeClaimTemplates:
+  - metadata:
+      name: keydb-data
+      annotations:
+      {{- if .Values.persistentVolume.annotations }}
+        {{- toYaml .Values.persistentVolume.annotations | nindent 8 }}
+      {{- end }}
+      labels:
+    spec:
+      accessModes:
+        {{- toYaml .Values.persistentVolume.accessModes | nindent 8 }}
+      resources:
+        requests:
+          storage: {{ .Values.persistentVolume.size }}
+      {{- if .Values.persistentVolume.storageClass }}
+      {{- if (eq "-" .Values.persistentVolume.storageClass) }}
+      storageClassName: ""
+      {{ else }}
+      storageClassName: {{ .Values.persistentVolume.storageClass }}
+      {{- end }}
+      {{- end }}
+  {{- end }}

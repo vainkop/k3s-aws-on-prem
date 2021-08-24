@@ -1,0 +1,48 @@
+- hosts: all
+  become: yes
+  become_user: root
+
+  vars:
+    UNINSTALL_K3S_SH: "{{ lookup('env', 'UNINSTALL_K3S_SH') }}"
+
+  tasks:
+
+    - name: Check that "{{ UNINSTALL_K3S_SH }}" exists
+      stat:
+        path: "{{ UNINSTALL_K3S_SH }}"
+      register: stat_result1
+
+    - name: Uninstall K3s if "{{ UNINSTALL_K3S_SH }}" exists
+      args:
+        executable: /bin/sh
+      shell: |
+        "{{ UNINSTALL_K3S_SH }}"
+      when: stat_result1.stat.exists
+      register: shell_output_k3s
+    - debug:
+        var: shell_output_k3s
+
+    - name: Check that /var/lib/rancher exists
+      stat:
+        path: /var/lib/rancher
+      register: stat_result2
+
+    - name: Check that /etc/rancher exists
+      stat:
+        path: /etc/rancher
+      register: stat_result3
+
+    - name: Remove /var/lib/rancher
+      file:
+        path: /var/lib/rancher
+        state: absent
+      when: stat_result2.stat.exists
+
+    - name: Remove /etc/rancher
+      file:
+        path: /etc/rancher
+        state: absent
+      when: stat_result3.stat.exists
+
+    - name: Reboot
+      reboot:
